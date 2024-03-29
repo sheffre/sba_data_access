@@ -9,7 +9,7 @@ library(RPostgres)
 #                 Sys.time(), "',  'yyyy-mm-dd hh24:mi:ss') AND WHERE timestamp > ",
 #                 "to_timestamp('", Sys.time()-86400, "', 'yyyy-mm-dd hh24-mi-ss'")
 
-query_generator <- function(left_border, right_border) {
+query_generator <- function(right_border, left_border) {
   query <- paste0("SELECT * FROM co2_atm_data WHERE timestamp <= ", "to_timestamp('",
                   right_border, "',  'yyyy-mm-dd hh24:mi:ss') AND WHERE timestamp >= ",
                   "to_timestamp('", left_border, "', 'yyyy-mm-dd hh24-mi-ss'")
@@ -18,7 +18,7 @@ query_generator <- function(left_border, right_border) {
 
 
 
-getter <- function() {
+getter <- function(method) {
   conn <- dbConnect(drv = RPostgres::Postgres(),
                     host     = '81.31.246.77',
                     user     = 'yukhoroshilov',
@@ -29,9 +29,13 @@ getter <- function() {
                   "daily" = query_generator(right_border = Sys.time(), 
                                             left_border = Sys.time()-(1*86400)),
                   "weekly" = query_generator(right_border = Sys.time(), 
-                                             left_border = Sys.time()-(7*86400)),
-                  "personal" = query_generator(right_border = ,
-                                               left_border = ))
+                                             left_border = Sys.time()-(7*86400))
+                  #,"personal" = query_generator(right_border = ,
+                  #                              left_border = ))
+  )
+  
+  df <- dbGetQuery(conn, query)
+  return(df)
 }
 
 ui <- fluidPage(
