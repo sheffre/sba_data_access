@@ -40,11 +40,27 @@ getter <- function(listed_con) {
                     password = listed_con$password,
                     dbname   = listed_con$dbname)
   
-  query <- query_generator(right_border = as.POSIXct(paste0(as.character(Sys.Date()), " 23:59:59")),
-                           left_border = as.POSIXct(paste0(as.character(Sys.Date()), " 00:00:00")))
+  # query <- query_generator(right_border = as.POSIXct(paste0(as.character(Sys.Date()), " 23:59:59", origin = "1970-01-01")),
+  #                          left_border = as.POSIXct(paste0(as.character(Sys.Date()), " 00:00:00", origin = "1970-01-01")))
+  
+  query <- "SELECT co2_partial_pressure, timestamp
+            FROM co2_atm_data
+WHERE timestamp >= (DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'GMT+3') - INTERVAL '3 hours')
+      AND timestamp AT TIME ZONE 'GMT+3' < DATE_TRUNC('day', ((CURRENT_TIMESTAMP + INTERVAL '1 day')) AT TIME ZONE 'GMT+3') ORDER BY timestamp DESC;" 
   
   df <- dbGetQuery(conn, query)
+  df$timestamp <- as.POSIXct(df$timestamp, tz = "Europe/Moscow")
   return(df)
+}
+
+processor <- function(df) {
+  # df$timestamp <- as.POSIXct(df$timestamp, tz = "Europe/Moscow")
+  df$timestamp_char <- as.character(round_date(df$timestamp, unit = "second"))
+  
+  df$timestamp_rounded = round_date(df$timestamp, "5 minutes")
+  df_5min <- aggregate(co2_partial_pressure ~ timestamp_rounded, data = df, FUN = mean)
+  ls <- list(df = df, df_5min = df_5min)
+  return(ls)
 }
 
 plotter <- function(ls, method) {
@@ -124,17 +140,6 @@ plotter_plotly <- function(method, ls) {
 }
 
 
-processor <- function(df) {
-  df$timestamp <- as.POSIXct(df$timestamp, tz = "Europe/Moscow")
-  df$timestamp_char <- as.character(round_date(df$timestamp, unit = "second"))
-  
-  df$timestamp_rounded = round_date(df$timestamp, "5 minutes")
-  df_5min <- aggregate(co2_partial_pressure ~ timestamp_rounded, data = df, FUN = mean)
-  ls <- list(df = df, df_5min = df_5min)
-  return(ls)
-}
-
-
 
 ui <- fluidPage(
   titlePanel("Просмотр данных газоанализатора SBA-5"),
@@ -146,7 +151,12 @@ ui <- fluidPage(
     column(tite = "Текущие значения содержания CO2", 
            width = 4,
            tableOutput('table'),
-           style = "height:300px; overflow-y: scroll")
+           style = "height:300px; overflow-y: scroll"),
+    page_fillable(
+      card("Row 1"),
+      card("Row 2"),
+      card("Row 3")
+    )
     )
 )
 
