@@ -4,7 +4,9 @@ required_packages <- c("shiny",
                        "DBI",
                        "RPostgres",
                        "lubridate",
-                       "ggplot2")
+                       "ggplot2",
+                       "shinyWidgets", 
+                       "plotly")
 
 install_if_missing <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -20,6 +22,8 @@ library(DBI)
 library(RPostgres)
 library(lubridate)
 library(ggplot2)
+library(shinyWidgets)
+library(plotly)
 
 # query <- paste0("SELECT * FROM co2_atm_data WHERE timestamp < ", "to_timestamp('",
 #                 Sys.time(), "',  'yyyy-mm-dd hh24:mi:ss') AND WHERE timestamp > ",
@@ -95,45 +99,47 @@ plotter <- function(ls, method) {
 plotter_plotly <- function(method, ls) {
   switch(method,
          "sec" = {fig <- plot_ly(ls$df, type = "scatter", mode = "lines") %>%
-           add_trace(x = ~timestamp, y = ~co2_partial_pressure, name = 'Содержание CO2', color = "black")%>%
+           add_trace(x = ~timestamp, y = ~co2_partial_pressure, name = 'Содержание CO2')%>%
            layout(showlegend = F)
          
          fig <- fig %>%
            layout(
+             colorway = "#00a876",
              title = "Суточный ход содержания CO2",
-             xaxis = list(zerolinecolor = '#ffff',
+             xaxis = list(zerolinecolor = '#838383',
                           zerolinewidth = 2,
-                          gridcolor = 'ffff',
+                          gridcolor = '#838383',
                           title = "Дата и время"
              ),
-             yaxis = list(zerolinecolor = '#ffff',
+             yaxis = list(zerolinecolor = '#838383',
                           zerolinewidth = 2,
-                          gridcolor = 'ffff',
+                          gridcolor = '#838383',
                           title = "Парциальное давление CO2, ppm"
              ),
-             plot_bgcolor='#e5ecf6')
+             plot_bgcolor='#323232')
          
          
          },
          "5min" = {
            fig <- plot_ly(ls$df_5min, type = "scatter", mode = "lines") %>%
-             add_trace(x = ~timestamp_rounded, y = ~co2_partial_pressure, name = 'Содержание CO2', color = "black")%>%
+             add_trace(x = ~timestamp_rounded, y = ~co2_partial_pressure, name = 'Содержание CO2')%>%
              layout(showlegend = F)
            
            fig <- fig %>%
              layout(
+               colorway = "#00a876",
                title = "Суточный ход содержания CO2",
-               xaxis = list(zerolinecolor = '#ffff',
+               xaxis = list(zerolinecolor = '#838383',
                             zerolinewidth = 2,
-                            gridcolor = 'ffff',
+                            gridcolor = '#838383',
                             title = "Дата и время"
                ),
-               yaxis = list(zerolinecolor = '#ffff',
+               yaxis = list(zerolinecolor = '#838383',
                             zerolinewidth = 2,
-                            gridcolor = 'ffff',
+                            gridcolor = '#838383',
                             title = "Парциальное давление CO2, ppm"
                ),
-               plot_bgcolor='#e5ecf6')
+               plot_bgcolor='#323232')
          }
          )
   return(fig)
@@ -141,24 +147,31 @@ plotter_plotly <- function(method, ls) {
 
 
 
-ui <- fluidPage(
-  titlePanel("Просмотр данных газоанализатора SBA-5"),
-  radioButtons("avg", "Выберите тип осреднения:",
-                   c("1 секунда" = "sec",
-                     "5 минут" = "5min")),
+ui <- page_sidebar(
+  title = titlePanel("Просмотр данных газоанализатора SBA-5"),
+  sidebar = sidebar(title = "Меню",
+                    radioButtons("avg", "Выберите тип осреднения:",
+                                  c("1 секунда" = "sec",
+                                    "5 минут" = "5min")),
+                    downloadButton("downloadData", "Загрузить данные за сутки"),
+                    position = 'right'),
   fluidRow(
+    # card(card_header("Суточный ход содержания CO2"), 
+    #      plotlyOutput('plot', height = "500px")),
     plotlyOutput('plot', height = "500px"),
-    column(tite = "Текущие значения содержания CO2", 
-           width = 4,
+    layout_columns(
+    card(card_header("Текущие значения содержания CO2"),
            tableOutput('table'),
            style = "height:300px; overflow-y: scroll"),
-    page_fillable(
-      card("Row 1"),
-      card("Row 2"),
-      card("Row 3")
+    card(card_header("Максимальное значение CO2 за сутки"),
+         textOutput('max')),
+    card(card_header("Среднее значение CO2 за сутки"),
+         textOutput('avg_val')),
+    card(card_header("Минимальное значение CO2 за сутки"),
+         card_body(textOutput('min')))
+    ),
     )
     )
-)
 
 
 
@@ -192,13 +205,32 @@ server <- function(input, output) {
     output$table <- renderTable({
       ls$df[c(1:60), c(1,3)]
     })
+    output$min <- renderText(min(ls$df$co2_partial_pressure))
+    output$max <- renderText(max(ls$df$co2_partial_pressure))
+    output$avg_val <- renderText(mean(ls$df$co2_partial_pressure))
   })
+  
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      dirname <- choose.dir(getwd(), caption = "Выберите директорию для сохранения файла:")
+      paste("/SBA_data_for", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(ls$df, file, row.names = FALSE)
+    }
+  )
   
   output$plot <- renderPlotly(plotter_plotly(ls, method = input$avg))
   
   output$table <- renderTable({
     ls$df[c(1:60), c(1,3)]
     })
+  output$min <- renderText(min(ls$df$co2_partial_pressure))
+  output$max <- renderText(max(ls$df$co2_partial_pressure))
+  output$avg_val <- renderText(round(mean(ls[["df"]][["co2_partial_pressure"]]), digits = 0))
 }
 
 shinyApp(ui, server)
+
+
+

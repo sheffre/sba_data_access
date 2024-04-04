@@ -7,7 +7,9 @@ ggplot(data = df, mapping = aes(x = timestamp,
   geom_point() +
   geom_line()
 
-
+df <- getter(con)
+df$timestamp <- as.POSIXct(df$timestamp, tz = "Europe/Moscow")
+df$timestamp_char <- as.character(df$timestamp)
 df$min <- format(as.POSIXct(df$timestamp), format = "%M")
 df$hour <- format(as.POSIXct(df$timestamp), format = "%H")
 
@@ -21,16 +23,24 @@ for (j in levels(as.factor(df$hour))) {
   }
 }
 
-avg_5_min <- matrix() 
+colnames(avg_minute)
 
-for(k in c(1:12)) {
-  for (j in c(1:nrow(avg_minute))) {
-    for (i in seq(1, 60, by = 5)) {
-      temp <- avg_minute[j, c(i, i+4)]
-      avg_5_min[j,k] <- mean(as.numeric(temp, na.rm = T)
-    }
-  }
-}
+df$timestamp_rounded = round_date(df$timestamp, "5 minutes")
+result <- aggregate(co2_partial_pressure ~ timestamp_rounded, data = df, FUN = mean)
+
+df %>%
+  mutate(year = year(timestamp), month = month(timestamp), day = day(timestamp),
+         hour = hour(timestamp), minute = minute(timestamp)) %>%
+  group_by(year, month, day, hour, minute) %>%
+  summarise(mean_var = mean(var))
+
+
+ggplot(data = result, mapping = aes(x = timestamp_rounded,
+                                y = co2_partial_pressure)) +
+  geom_point() +
+  geom_line()
+
+
 
 # sub <- subset(df, hour == 15)
 # sub2 <- subset(sub, min == i)
