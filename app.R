@@ -177,11 +177,11 @@ ui <- page_sidebar(
            tableOutput('table'),
            style = "height:300px; overflow-y: scroll"),
     card(card_header("Максимальное значение CO2 за сутки"),
-         span(textOutput('max'), style = "color:#00a876; font-size:72px")),
+         span(textOutput('max'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline")),
     card(card_header("Среднее значение CO2 за сутки"),
-         span(textOutput('avg_val'), style = "color:#00a876; font-size:72px")),
+         span(textOutput('avg_val'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline")),
     card(card_header("Минимальное значение CO2 за сутки"),
-         span(textOutput('min'), style = "color:#00a876; font-size:72px"))
+         span(textOutput('min'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline"))
     ),
     )
     )
@@ -220,7 +220,7 @@ server <- function(input, output) {
     })
     output$min <- renderText(min(ls$df$co2_partial_pressure))
     output$max <- renderText(max(ls$df$co2_partial_pressure))
-    output$avg_val <- renderText(mean(ls$df$co2_partial_pressure))
+    output$avg_val <- renderText(expr = rd_mean(as.numeric(ls$df$co2_partial_pressure)))
   })
   
   output$downloadData <- downloadHandler(
