@@ -99,7 +99,8 @@ plotter <- function(ls, method) {
 plotter_plotly <- function(method, ls) {
   switch(method,
          "sec" = {fig <- plot_ly(ls$df, type = "scatter", mode = "lines") %>%
-           add_trace(x = ~timestamp, y = ~co2_partial_pressure, name = 'Содержание CO2')%>%
+           add_trace(x = ~timestamp, y = ~co2_partial_pressure, name = 'Содержание CO2',
+                     hovertemplate = 'pCO2: %{y:ppm}\nВремя: %{x}<extra></extra>')%>%
            layout(showlegend = F)
          
          fig <- fig %>%
@@ -116,13 +117,16 @@ plotter_plotly <- function(method, ls) {
                           gridcolor = '#838383',
                           title = "Парциальное давление CO2, ppm"
              ),
-             plot_bgcolor='#323232')
+             plot_bgcolor='#ffffff')
          
          
          },
          "5min" = {
            fig <- plot_ly(ls$df_5min, type = "scatter", mode = "lines") %>%
-             add_trace(x = ~timestamp_rounded, y = ~co2_partial_pressure, name = 'Содержание CO2')%>%
+             add_trace(x = ~timestamp_rounded, 
+                       y = ~co2_partial_pressure, 
+                       name = 'Содержание CO2',
+                       hovertemplate = 'pCO2: %{y:ppm}\nВремя: %{x}<extra></extra>')%>%
              layout(showlegend = F)
            
            fig <- fig %>%
@@ -137,14 +141,22 @@ plotter_plotly <- function(method, ls) {
                yaxis = list(zerolinecolor = '#838383',
                             zerolinewidth = 2,
                             gridcolor = '#838383',
-                            title = "Парциальное давление CO2, ppm"
+                            title = "Парциальное давление CO2, ppm",
                ),
-               plot_bgcolor='#323232')
+               plot_bgcolor='#ffffff')
          }
          )
   return(fig)
 }
 
+table_unit <- function(df) {
+  colnames(df)[c(1,3)] = c("pCO2, ppm", "Дата и время")
+  return(df[c(1:60), c(1,3)])
+}
+
+rd_mean <- function(vec) {
+  round(mean(vec), digits = 0)
+}
 
 
 ui <- page_sidebar(
@@ -154,6 +166,7 @@ ui <- page_sidebar(
                                   c("1 секунда" = "sec",
                                     "5 минут" = "5min")),
                     downloadButton("downloadData", "Загрузить данные за сутки"),
+                    actionBttn('plot_upd', "Обновить график хода"),
                     position = 'right'),
   fluidRow(
     # card(card_header("Суточный ход содержания CO2"), 
@@ -164,11 +177,11 @@ ui <- page_sidebar(
            tableOutput('table'),
            style = "height:300px; overflow-y: scroll"),
     card(card_header("Максимальное значение CO2 за сутки"),
-         textOutput('max')),
+         span(textOutput('max'), style = "color:#00a876; font-size:72px")),
     card(card_header("Среднее значение CO2 за сутки"),
-         textOutput('avg_val')),
+         span(textOutput('avg_val'), style = "color:#00a876; font-size:72px")),
     card(card_header("Минимальное значение CO2 за сутки"),
-         card_body(textOutput('min')))
+         span(textOutput('min'), style = "color:#00a876; font-size:72px"))
     ),
     )
     )
@@ -203,7 +216,7 @@ server <- function(input, output) {
     ls <- processor(getter(listed_conn))
     # output$plot <- renderPlot(plotter(ls, method = input$avg))
     output$table <- renderTable({
-      ls$df[c(1:60), c(1,3)]
+      table_unit(ls$df)
     })
     output$min <- renderText(min(ls$df$co2_partial_pressure))
     output$max <- renderText(max(ls$df$co2_partial_pressure))
@@ -220,17 +233,19 @@ server <- function(input, output) {
     }
   )
   
+  observeEvent(input$plot_upd, {
+    ls <- processor(getter(listed_conn))
+    output$plot <- renderPlotly(plotter_plotly(ls, method = input$avg))
+  })
+  
   output$plot <- renderPlotly(plotter_plotly(ls, method = input$avg))
   
   output$table <- renderTable({
-    ls$df[c(1:60), c(1,3)]
+    table_unit(ls$df)
     })
   output$min <- renderText(min(ls$df$co2_partial_pressure))
   output$max <- renderText(max(ls$df$co2_partial_pressure))
-  output$avg_val <- renderText(round(mean(ls[["df"]][["co2_partial_pressure"]]), digits = 0))
+  output$avg_val <- renderText(expr = rd_mean(as.numeric(ls$df$co2_partial_pressure)))
 }
 
 shinyApp(ui, server)
-
-
-
