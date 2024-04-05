@@ -2,4 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
+<<<<<<< HEAD
 tests
+=======
+appRun.R
+>>>>>>> dcfae487fe690f3188d0d8898f8c175b54d771ed
+app.R
