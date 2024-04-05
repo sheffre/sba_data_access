@@ -7,7 +7,7 @@ required_packages <- c("shiny",
                        "ggplot2",
                        "shinyWidgets", 
                        "plotly",
-                       "readr")
+                       "daterangepicker")
 
 install_if_missing <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -26,15 +26,18 @@ library(ggplot2)
 library(shinyWidgets)
 library(plotly)
 library(readr)
+library(daterangepicker)
 
 # query <- paste0("SELECT * FROM co2_atm_data WHERE timestamp < ", "to_timestamp('",
 #                 Sys.time(), "',  'yyyy-mm-dd hh24:mi:ss') AND WHERE timestamp > ",
 #                 "to_timestamp('", Sys.time()-86400, "', 'yyyy-mm-dd hh24-mi-ss'")
 
-query_generator <- function(right_border, left_border) {
-  query <- paste0("SELECT co2_partial_pressure, timestamp FROM co2_atm_data WHERE timestamp <= ", "to_timestamp('",
-                  right_border, "',  'yyyy-mm-dd hh24:mi:ss') AND timestamp >= ",
-                  "to_timestamp('", left_border, "', 'yyyy-mm-dd hh24-mi-ss') ORDER BY timestamp DESC")
+query_generator <- function(borders) {
+  query <- paste0("SELECT * 
+                  FROM avg_hour_values 
+                  WHERE upper_time <= ", "date_trunc('day', TIMESTAMP '", as.character(borders[2]), "') 
+                  AND upper_time >= ", "date_trunc('day', TIMESTAMP '", as.character(borders[1]), "') 
+                  ORDER BY upper_time DESC")
   return(query)
 }
 
@@ -143,7 +146,7 @@ plotter_plotly <- function(method, ls) {
                yaxis = list(zerolinecolor = '#838383',
                             zerolinewidth = 2,
                             gridcolor = '#838383',
-                            title = "Парциальное давление CO2, ppm",
+                            title = "Парциальное давление CO2, ppm"
                ),
                plot_bgcolor='#ffffff')
          }
@@ -160,14 +163,26 @@ rd_mean <- function(vec) {
   round(mean(vec), digits = 0)
 }
 
+cal_getter <- function(listed_con, output_vec) {
+  con <- dbConnect(drv = listed_con$drv,
+                   host = listed_con$host,
+                   user = listed_con$user,
+                   password = listed_con$password,
+                   dbname = listed_con$dbname)
+  result <- dbGetQuery(conn = con, statement = query_generator(output_vec))
+  dbDisconnect(con)
+  return(result)
+}
+
+
 
 ui <- page_sidebar(
-  title = titlePanel("Просмотр данных газоанализатора SBA-5"),
+  title = titlePanel(div("Просмотр данных газоанализатора SBA-5", style = "text-align: center")),
   sidebar = sidebar(title = "Меню",
                     radioButtons("avg", "Выберите тип осреднения:",
                                   c("1 секунда" = "sec",
                                     "5 минут" = "5min")),
-                    downloadBttn("downloadData", "Загрузить данные за сутки"),
+                    downloadButton("downloadData", "Загрузить данные за сутки"),
                     actionBttn('plot_upd', "Обновить график хода"),
                     position = 'right'),
   fluidRow(
@@ -175,15 +190,27 @@ ui <- page_sidebar(
     #      plotlyOutput('plot', height = "500px")),
     plotlyOutput('plot', height = "500px"),
     layout_columns(
-    card(card_header("Текущие значения содержания CO2"),
+    card(card_header("Текущие значения содержания CO2", style = "text-align: center"),
            tableOutput('table'),
            style = "height:300px; overflow-y: scroll"),
-    card(card_header("Максимальное значение CO2 за сутки"),
+    card(card_header("Максимальное значение CO2\nза сутки", style = "text-align: center"),
          span(textOutput('max'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline")),
-    card(card_header("Среднее значение CO2 за сутки"),
+    card(card_header("Среднее значение CO2\nза сутки", style = "text-align: center"),
          span(textOutput('avg_val'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline")),
-    card(card_header("Минимальное значение CO2 за сутки"),
-         span(textOutput('min'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline"))
+    card(card_header("Минимальное значение CO2\nза сутки", style = "text-align: center"),
+         span(textOutput('min'), style = "color:#00a876; font-size:72px; text-align: center; vertical-align: baseline")),
+    card(card_header("Загрузка данных за определенное время\n "),
+         card_footer("Позволяет загрузить почасовые осреднения данных за выбранный период на Ваш ПК."),
+         full_screen = T,
+         daterangepicker(
+           inputId = "daterange",
+           label = "Выберите даты:",
+           start = Sys.Date() - 30, end = Sys.Date(),
+           style = "width:100%; border-radius:4px",
+           icon = icon("calendar")
+         ),
+         downloadButton("downloadCal", "Загрузить данные за выбранный период")
+         )
     ),
     )
     )
@@ -202,6 +229,12 @@ server <- function(input, output) {
                      user     = 'shinytest',
                      password = "17082002asxc",
                      dbname   = "default_db")
+  
+  listed_conn_cal <- list(drv = RPostgres::Postgres(),
+                          host     = '81.31.246.77',
+                          user     = 'shinycaltest',
+                          password = "17082002aszxdf",
+                          dbname   = "default_db")
   
   
   conn <- dbConnect(drv = listed_conn$drv,
@@ -223,18 +256,25 @@ server <- function(input, output) {
     output$min <- renderText(min(ls$df$co2_partial_pressure))
     output$max <- renderText(max(ls$df$co2_partial_pressure))
     output$avg_val <- renderText(expr = rd_mean(as.numeric(ls$df$co2_partial_pressure)))
-    
-    
   })
-  
   
   output$downloadData <- downloadHandler(
     filename = function() {
       dirname <- choose.dir(getwd(), caption = "Выберите директорию для сохранения файла:")
-      paste(getwd(), "/SBA_data_for", Sys.Date(), ".csv", sep = "")
+      paste("/SBA_data_for", Sys.Date(), ".csv", sep = "")
     },
-    content = function(filename) {
-      write_csv(ls$df, filename, progress = show_progress())
+    content = function(file) {
+      write_csv(ls$df, file)
+    }
+  )
+  
+  output$downloadCal <- downloadHandler(
+    filename = function() {
+      paste(choose.dir(caption = "Выберите директорию для сохранения файла:"), "/SBA_data_from ", format(input$daterange[1]), " to ", format(input$daterange[2]), ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(x = cal_getter(listed_con = listed_conn_cal, 
+                           output_vec = input$daterange), file = file)
     }
   )
   
@@ -254,4 +294,3 @@ server <- function(input, output) {
 }
 
 shinyApp(ui, server)
-
