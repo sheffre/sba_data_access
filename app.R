@@ -6,7 +6,8 @@ required_packages <- c("shiny",
                        "lubridate",
                        "ggplot2",
                        "shinyWidgets", 
-                       "plotly")
+                       "plotly",
+                       "readr")
 
 install_if_missing <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -24,6 +25,7 @@ library(lubridate)
 library(ggplot2)
 library(shinyWidgets)
 library(plotly)
+library(readr)
 
 # query <- paste0("SELECT * FROM co2_atm_data WHERE timestamp < ", "to_timestamp('",
 #                 Sys.time(), "',  'yyyy-mm-dd hh24:mi:ss') AND WHERE timestamp > ",
@@ -165,7 +167,7 @@ ui <- page_sidebar(
                     radioButtons("avg", "Выберите тип осреднения:",
                                   c("1 секунда" = "sec",
                                     "5 минут" = "5min")),
-                    downloadButton("downloadData", "Загрузить данные за сутки"),
+                    downloadBttn("downloadData", "Загрузить данные за сутки"),
                     actionBttn('plot_upd', "Обновить график хода"),
                     position = 'right'),
   fluidRow(
@@ -221,15 +223,18 @@ server <- function(input, output) {
     output$min <- renderText(min(ls$df$co2_partial_pressure))
     output$max <- renderText(max(ls$df$co2_partial_pressure))
     output$avg_val <- renderText(expr = rd_mean(as.numeric(ls$df$co2_partial_pressure)))
+    
+    
   })
+  
   
   output$downloadData <- downloadHandler(
     filename = function() {
       dirname <- choose.dir(getwd(), caption = "Выберите директорию для сохранения файла:")
-      paste("/SBA_data_for", Sys.Date(), ".csv", sep = "")
+      paste(getwd(), "/SBA_data_for", Sys.Date(), ".csv", sep = "")
     },
-    content = function(file) {
-      write.csv(ls$df, file, row.names = FALSE)
+    content = function(filename) {
+      write_csv(ls$df, filename, progress = show_progress())
     }
   )
   
@@ -249,3 +254,4 @@ server <- function(input, output) {
 }
 
 shinyApp(ui, server)
+
